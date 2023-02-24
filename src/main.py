@@ -26,6 +26,13 @@ from src.moderation import (
     send_moderation_flagged_message,
 )
 
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
+#from langchain.document_loaders import GitbookLoader
+from langchain.chains.question_answering import load_qa_chain
+from langchain.llms import OpenAI
+from src.loader import NatMLLoader
+
 logging.basicConfig(
     format="[%(asctime)s] [%(filename)s:%(lineno)d] %(message)s", level=logging.INFO
 )
@@ -36,6 +43,15 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 tree = discord.app_commands.CommandTree(client)
 
+# Fetch docs
+loader = NatMLLoader("https://docs.natml.ai/unity", load_all_paths=True)
+all_pages_data = loader.load()
+print(f"fetched {len(all_pages_data)} documents.")
+embeddings = OpenAIEmbeddings()
+
+query = "How do I create a model"
+docsearch = Chroma.from_documents(all_pages_data, embeddings)
+docs = docsearch.similarity_search(query)
 
 @client.event
 async def on_ready():
@@ -128,7 +144,7 @@ async def chat_command(int: discord.Interaction, message: str):
             # fetch completion
             messages = [Message(user=user.name, text=message)]
             response_data = await generate_completion_response(
-                messages=messages, user=user
+                messages=messages, user=user, docs=docs
             )
             # send the result
             await process_response(
@@ -245,7 +261,7 @@ async def on_message(message: DiscordMessage):
         # generate the response
         async with thread.typing():
             response_data = await generate_completion_response(
-                messages=channel_messages, user=message.author
+                messages=channel_messages, user=message.author, docs=docs
             )
 
         if is_last_message_stale(

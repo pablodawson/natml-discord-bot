@@ -16,6 +16,10 @@ from src.moderation import (
     send_moderation_blocked_message,
 )
 
+import os
+from langchain.chains.question_answering import load_qa_chain
+from langchain.llms import OpenAI
+
 MY_BOT_NAME = BOT_NAME
 MY_BOT_EXAMPLE_CONVOS = EXAMPLE_CONVOS
 
@@ -37,7 +41,7 @@ class CompletionData:
 
 
 async def generate_completion_response(
-    messages: List[Message], user: str
+    messages: List[Message], user: str, docs
 ) -> CompletionData:
     try:
         prompt = Prompt(
@@ -47,16 +51,20 @@ async def generate_completion_response(
             examples=MY_BOT_EXAMPLE_CONVOS,
             convo=Conversation(messages + [Message(MY_BOT_NAME)]),
         )
+        ###
         rendered = prompt.render()
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=rendered,
-            temperature=1.0,
-            top_p=0.9,
-            max_tokens=512,
-            stop=["<|endoftext|>"],
-        )
-        reply = response.choices[0].text.strip()
+        chain = load_qa_chain(OpenAI(temperature=0, openai_api_key=os.getenv('OPENAI_API_KEY')), chain_type="stuff")
+        reply = chain.run(input_documents=docs, question=rendered)
+
+        #response = openai.Completion.create(
+        #    engine="text-davinci-003",
+       #     prompt=rendered,
+        #    temperature=1.0,
+       #     top_p=0.9,
+       #     max_tokens=512,
+       #     stop=["<|endoftext|>"],
+        #)
+       # reply = response.choices[0].text.strip()
         if reply:
             flagged_str, blocked_str = moderate_message(
                 message=(rendered + reply)[-500:], user=user
